@@ -24,6 +24,7 @@ type Board struct {
 	cells      [][]int
 	size       int
 	updateChan chan int
+	exitChan   chan bool
 	snake      Snake
 }
 
@@ -33,6 +34,7 @@ func newBoard(size int) *Board {
 	b.size = size
 	b.cells = make([][]int, 0, size)
 	b.updateChan = make(chan int)
+	b.exitChan = make(chan bool)
 	for i := 0; i < size; i++ {
 		tmp := make([]int, size)
 		b.cells = append(b.cells, tmp)
@@ -46,6 +48,8 @@ func (b *Board) displayLoop() {
 		select {
 		case d := <-b.updateChan:
 			b.updateBoard(d)
+			clear()
+			b.display()
 		case <-time.After(time.Millisecond * 200):
 			b.updateBoard(b.snake.dir)
 			clear()
@@ -81,7 +85,11 @@ func (b *Board) updateBoard(direct int) {
 	case 3: // d
 		b.snake.y = (b.snake.y + 1) % b.size
 	}
-	b.cells[b.snake.x][b.snake.y] = b.snake.len
+	if b.cells[b.snake.x][b.snake.y] == 0 {
+		b.cells[b.snake.x][b.snake.y] = b.snake.len
+	} else {
+		b.exitChan <- true
+	}
 	for row := range b.cells {
 		for col := range b.cells[row] {
 			if b.cells[row][col] > 0 {
@@ -123,16 +131,15 @@ func clear() {
 
 // inLoop
 func inLoop(isComplete chan bool) {
-	exitChan := make(chan bool)
 	board := newBoard(30)
 	directChan := make(chan int)
-	go getDirection(directChan, exitChan)
+	go getDirection(directChan, board.exitChan)
 	for {
 		select {
 		case direct := <-directChan:
 			fmt.Println(direct)
 			board.update(direct)
-		case <-exitChan:
+		case <-board.exitChan:
 			goto exit
 		}
 	}
