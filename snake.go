@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
 	"time"
@@ -39,6 +40,7 @@ func newBoard(size int) *Board {
 		tmp := make([]int, size)
 		b.cells = append(b.cells, tmp)
 	}
+	b.cells[b.size/2][b.size/2] = -1 // make the ball in the middle of board
 	go b.displayLoop()
 	return &b
 }
@@ -65,11 +67,25 @@ func (b Board) display() {
 		for col := range b.cells[row] {
 			if b.cells[row][col] > 0 {
 				rowStr[col] = '@'
+			} else if b.cells[row][col] < 0 {
+				rowStr[col] = '*'
 			} else {
 				rowStr[col] = ' '
 			}
 		}
 		fmt.Printf("|%s|\n", string(rowStr))
+	}
+}
+
+func (b *Board) randBall() {
+	for {
+		posi := rand.Intn(b.size * b.size)
+		row := posi / b.size
+		col := posi % b.size
+		if b.cells[row][col] == 0 {
+			b.cells[row][col] = -1
+			break
+		}
 	}
 }
 
@@ -87,6 +103,10 @@ func (b *Board) updateBoard(direct int) {
 	}
 	if b.cells[b.snake.x][b.snake.y] == 0 {
 		b.cells[b.snake.x][b.snake.y] = b.snake.len
+	} else if b.cells[b.snake.x][b.snake.y] < 0 {
+		b.snake.len += 1
+		b.cells[b.snake.x][b.snake.y] = b.snake.len
+		b.randBall()
 	} else {
 		b.exitChan <- true
 	}
@@ -123,13 +143,14 @@ func getDirection(directChan chan int, exitChan chan bool) {
 	}
 }
 
+// clear the screen
 func clear() {
 	c := exec.Command("clear")
 	c.Stdout = os.Stdout
 	c.Run()
 }
 
-// inLoop
+// inLoop call by man thread to handle get keyboard
 func inLoop(isComplete chan bool) {
 	board := newBoard(30)
 	directChan := make(chan int)
@@ -137,7 +158,6 @@ func inLoop(isComplete chan bool) {
 	for {
 		select {
 		case direct := <-directChan:
-			fmt.Println(direct)
 			board.update(direct)
 		case <-board.exitChan:
 			goto exit
@@ -146,6 +166,10 @@ func inLoop(isComplete chan bool) {
 exit:
 	fmt.Println("Leaving Game")
 	isComplete <- true
+}
+
+func init() {
+	rand.Seed(time.Now().Unix())
 }
 
 // main
